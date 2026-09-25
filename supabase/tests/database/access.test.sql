@@ -1,7 +1,7 @@
 -- Run against a fresh local Supabase database. This transaction never changes staging.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(35);
 
 insert into auth.users (id,email) values
  ('00000000-0000-4000-8000-000000000001','acg-a@example.test'),
@@ -48,6 +48,11 @@ select ok((select bool_and(relrowsecurity) from pg_class where oid in (
  'public.properties'::regclass,'public.inspections'::regclass,'public.issues'::regclass,
  'public.documents'::regclass,'public.service_events'::regclass,'public.quotes'::regclass,
  'public.audit_events'::regclass)), 'every customer-facing table has RLS enabled');
+select is(has_table_privilege('authenticated','public.properties','SELECT'),true,'authenticated property reads have an explicit API grant');
+select is(has_table_privilege('authenticated','public.quotes','INSERT'),true,'authenticated quote requests have an explicit API grant');
+select is(has_table_privilege('anon','public.properties','SELECT'),false,'anonymous users have no property table grant');
+select is(has_table_privilege('authenticated','public.staff_users','INSERT'),false,'no API role can grant staff access');
+select is(has_table_privilege('authenticated','public.audit_events','INSERT'),false,'audit entries can only be written by triggers');
 select throws_ok($$insert into public.documents (property_id,inspection_id,kind,title)
  values ('00000000-0000-4000-8000-000000000201','00000000-0000-4000-8000-000000000302','property_mot','Wrong inspection')$$,
  '23503',null,'a report cannot refer to an inspection of another property');
@@ -60,8 +65,8 @@ select throws_ok($$insert into public.documents (property_id,kind,title,issued_o
 
 set local role anon;
 set local request.jwt.claim.sub = '';
-select is((select count(*)::integer from public.properties),0,'anonymous users see no properties');
-select is((select count(*)::integer from public.documents),0,'anonymous users see no documents');
+select throws_ok('select count(*) from public.properties','42501',null,'anonymous users cannot read properties');
+select throws_ok('select count(*) from public.documents','42501',null,'anonymous users cannot read documents');
 reset role;
 
 set local role authenticated;
@@ -73,8 +78,8 @@ select is((select count(*)::integer from public.issues),1,'customer A sees only 
 select is((select count(*)::integer from public.documents),2,'customer A sees published documents and missing evidence, but no draft');
 select is((select count(*)::integer from public.service_events),1,'customer A sees only their service history');
 select is((select count(*)::integer from public.quotes),1,'customer A cannot see draft or other-owner quotes');
-select is(public.can_access_property('00000000-0000-4000-8000-000000000203'),false,'customer A cannot access customer B property by ID');
-select is(public.is_staff(),false,'customer A cannot claim a staff role');
+select is(acg_internal.can_access_property('00000000-0000-4000-8000-000000000203'),false,'customer A cannot access customer B property by ID');
+select is(acg_internal.is_staff(),false,'customer A cannot claim a staff role');
 select lives_ok($$insert into public.quotes (property_id,title)
  values ('00000000-0000-4000-8000-000000000202','Own quote request')$$,'customer A can request a quote for their second property');
 select throws_ok($$insert into public.quotes (property_id,title)
@@ -97,15 +102,15 @@ select is((select count(*)::integer from public.properties),0,'an empty account 
 select is((select count(*)::integer from public.documents),0,'an empty account sees no documents');
 
 set local request.jwt.claim.sub = '00000000-0000-4000-8000-000000000003';
-select is(public.is_staff(),true,'staff role can be verified');
-select is(public.is_admin(),false,'staff role has no admin permission');
+select is(acg_internal.is_staff(),true,'staff role can be verified');
+select is(acg_internal.is_admin(),false,'staff role has no admin permission');
 select is((select count(*)::integer from public.documents),4,'staff can review unpublished reports across properties');
 select throws_ok($$insert into public.customer_users (customer_id,user_id)
  values ('00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000003')$$,
  '42501',null,'staff cannot grant a customer link');
 
 set local request.jwt.claim.sub = '00000000-0000-4000-8000-000000000004';
-select is(public.is_admin(),true,'admin role can be verified');
+select is(acg_internal.is_admin(),true,'admin role can be verified');
 select lives_ok($$insert into public.customer_users (customer_id,user_id)
  values ('00000000-0000-4000-8000-000000000102','00000000-0000-4000-8000-000000000005')$$,
  'admin can explicitly grant a customer link');

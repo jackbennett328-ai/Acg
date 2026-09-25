@@ -6,7 +6,7 @@ The official ACG logo supplied on 25 September 2026 is included unchanged at `pu
 
 ## Local setup
 
-1. `npm install`
+1. `npm ci`
 2. Copy `.env.example` to `.env.local` and set the staging Supabase URL and publishable/anon key. `NEXT_PUBLIC_SUPABASE_ANON_KEY` accepts a Supabase publishable key despite the historical variable name. Set `SUPABASE_SERVICE_ROLE_KEY` only in a secure server environment for administrator invitations. Never put it in `NEXT_PUBLIC_` variables.
 3. The migration `supabase/migrations/20260925175846_core_portal.sql` has been applied to the separate **ACG Staging** project in London. Use the migration runner for other environments; do not apply it twice to staging.
 4. Once staging hosting is available, set the Supabase Auth Site URL to that URL and allow `https://<staging-host>/auth/callback`, `/auth/confirm` and `/update-password` as redirect destinations. With a configurable email provider, link invites to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite` and password recoveries to the same path with `type=recovery`. The app also accepts PKCE callbacks at `/auth/callback`. New Free projects with Supabase's default SMTP cannot customise email templates; test the default invitation and recovery links on staging before customer use, and configure a suitable mail sender before real customer invitations.

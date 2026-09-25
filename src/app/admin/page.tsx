@@ -1,0 +1,9 @@
+import Link from 'next/link';
+import {staffSession} from '@/lib/admin';
+import {AdminTitle} from '@/components/admin-shell';
+export default async function Admin(){const {db}=await staffSession();const [customers,properties,inspections,issues,documents,renewals]=await Promise.all([
+  db.from('customers').select('*',{count:'exact',head:true}),db.from('properties').select('*',{count:'exact',head:true}),db.from('inspections').select('*',{count:'exact',head:true}),
+  db.from('issues').select('*',{count:'exact',head:true}).neq('status','resolved'),db.from('documents').select('*',{count:'exact',head:true}),
+  db.from('documents').select('*',{count:'exact',head:true}).lte('expires_on',new Date(Date.now()+60*86400000).toISOString().slice(0,10))]);
+  const cards:[string,number|null,string][]=[['Customers',customers.count,'/admin/customers'],['Properties',properties.count,'/admin/properties'],['Inspections',inspections.count,'/admin/inspections'],['Open issues',issues.count,'/admin/issues'],['Documents',documents.count,'/admin/documents'],['Expiring / expired',renewals.count,'/admin/renewals']];
+  return <><AdminTitle eyebrow="OPERATIONS" title="Overview" description="Customer and property records in one workspace."><Link className="button dark" href="/admin/reports">Attach report</Link></AdminTitle><div className="admin-metrics">{cards.map(([label,count,url])=><Link href={url} key={label}><span>{label}</span><strong>{count??'—'}</strong><small>View records →</small></Link>)}</div><div className="admin-panel"><h2>Start with a customer</h2><p>Create the customer, add their property, then record an inspection and attach the exported SafetyCulture PDF to that property.</p><div className="admin-actions"><Link className="button dark" href="/admin/customers">Customers</Link><Link className="button outline" href="/admin/properties">Properties</Link></div></div></>}
